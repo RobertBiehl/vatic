@@ -1,0 +1,29 @@
+# Follow these instructions mainly
+https://github.com/cvondrick/vatic/issues/93#issuecomment-351176358
+
+# Incase mysql is saying access denied with root user
+https://askubuntu.com/questions/766334/cant-login-as-mysql-user-root-from-normal-user-account-in-ubuntu-16-04/801950
+
+# Incase apache server is saying access denied
+vi /etc/apache2/sites-enabled/000-default.conf
+
+WSGIDaemonProcess www-data
+WSGIProcessGroup www-data
+
+<VirtualHost *:80>
+    ServerName vatic.local
+    DocumentRoot /home/va/vatic/public
+
+    WSGIScriptAlias /server /home/va/vatic/server.py
+    CustomLog /var/log/apache2/access.log combined
+<Directory /home/va/vatic>
+<Files server.py>
+    Require all granted
+</Files>
+</Directory>
+<Directory /home/va/vatic/public>
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
+</VirtualHost>

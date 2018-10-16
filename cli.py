@@ -23,6 +23,18 @@ import datetime, time
 import vision.pascal
 import itertools
 from xml.etree import ElementTree
+import json
+from server import savejob
+import re
+
+
+def natural_sort(l):
+    def convert(text):
+        return int(text) if text.isdigit() else text.lower()
+
+    def alphanum_key(key):
+        return [convert(c) for c in re.split('([0-9]+)', key)]
+    return sorted(l, key=alphanum_key)
 
 @handler("Decompresses an entire video into frames")
 class extract(Command):
@@ -121,7 +133,11 @@ class load(LoadCommand):
         parser.add_argument("--for-training-tolerance", type=float, default=0.2)
         parser.add_argument("--for-training-mistakes", type=int, default=0)
         parser.add_argument("--for-training-data", default = None)
-        parser.add_argument("--blow-radius", default = 3)
+        parser.add_argument("--blow-radius", default=0)
+        parser.add_argument("--annot", help="Path to annotated file")
+        parser.add_argument("--annot-video-height", help="Height of the video in annotations")
+        parser.add_argument("--annot-blow-radius", default=0, type=int,
+                            help="Ignores given number of annotations in-between annotated frames")
         return parser
 
     def title(self, args):
@@ -250,7 +266,10 @@ class load(LoadCommand):
 
         print "Creating segments..."
         # create shots and jobs
-       
+
+        job_list = []
+        segment_list = []
+
         if args.for_training:
                 segment = Segment(video = video)
                 if args.for_training_start:
@@ -266,6 +285,8 @@ class load(LoadCommand):
                 else:
                     segment.stop = video.totalframes - 1
                 job = Job(segment = segment, group = group, ready = False)
+                job_list.append(job)
+                segment_list.append(segment)
                 session.add(segment)
                 session.add(job)
         elif args.use_frames:
@@ -284,6 +305,9 @@ class load(LoadCommand):
                                           stop = stop, 
                                           video = video)
                         job = Job(segment = segment, group = group)
+                        job_list.append(job)
+                        segment_list.append(segment)
+
                         session.add(segment)
                         session.add(job)
         else:
@@ -298,6 +322,9 @@ class load(LoadCommand):
                                     stop = stop,
                                     video = video)
                 job = Job(segment = segment, group = group)
+                job_list.append(job)
+                segment_list.append(segment)
+
                 session.add(segment)
                 session.add(job)
 
@@ -339,6 +366,69 @@ class load(LoadCommand):
                     pathcache[id].boxes.append(box)
 
         session.commit()
+
+        # Save the annotated file in the database
+        if args.annot is not None:
+            with open(args.annot, 'r') as annot_file:
+                annotated_tracks = json.load(annot_file)
+
+            # Scale annotations if annot-video-height is given as argument
+            annot_scalar = 1.0
+            if args.annot_video_height is not None:
+                annot_scalar = video.height / float(args.annot_video_height) * 1.5
+                print('Scale factor: {}'.format(annot_scalar))
+
+            # Scale bboxes and convert labels
+            converted_tracks = []
+            for a_labels, a_tracks, a_attribs in annotated_tracks:
+                scaled_a_tracks = {}
+                keep_tracks = a_tracks.keys()
+
+                # Blow-radius for annotations
+                if args.annot_blow_radius > 0:
+                    keep_tracks = sorted(map(int, keep_tracks))
+                    prev_frame_id = keep_tracks[0]
+                    blown_tracks = [keep_tracks[0]]
+                    for frame_id in keep_tracks:
+                        if frame_id > prev_frame_id + args.annot_blow_radius:
+                            prev_frame_id = frame_id
+                            blown_tracks.append(frame_id)
+                    keep_tracks = map(unicode, blown_tracks)
+
+                # Conversion
+                for track_id, track_data in a_tracks.iteritems():
+                    if track_id in keep_tracks:
+                        scaled_track = [x * annot_scalar for x in track_data[:4]]
+                        scaled_track.extend(track_data[4:])
+                        scaled_a_tracks[track_id] = scaled_track
+                converted_tracks.append([labelcache[a_labels].id, scaled_a_tracks, a_attribs])
+            for j, s in zip(job_list, segment_list):
+                job_data = []
+                for a_labels, a_tracks, a_attribs in converted_tracks:
+                    # Sort by track number
+                    sorted_a_tracks = natural_sort(a_tracks.keys())
+                    sorted_a_attribs = natural_sort(a_attribs.keys())
+
+                    job_tracks = {}
+                    job_attribs = {k.id: {} for k in attributecache.values()}
+                    for track_id in sorted_a_tracks:
+                        track_data = a_tracks[track_id]
+                        track_id = int(track_id)
+                        if s.start <= track_id <= s.stop:
+                            job_tracks[track_id] = track_data
+                        if track_id > s.stop:
+                            break
+                    for track_id in sorted_a_attribs:
+                        attrib_data = a_attribs[track_id]
+                        track_id = int(track_id)
+                        if s.start <= track_id <= s.stop:
+                            for k in job_attribs.keys():
+                                job_attribs[k][track_id] = 0
+                            job_attribs[attributecache[attrib_data].id][track_id] = 1
+                        if track_id > s.stop:
+                            break
+                    job_data.append([a_labels, job_tracks, job_attribs])
+                savejob(j.id, job_data)
 
         if args.for_training:
             if args.for_training and args.for_training_data:

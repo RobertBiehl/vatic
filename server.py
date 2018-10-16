@@ -8,19 +8,22 @@ import cStringIO
 from models import *
 
 import logging
-logger = logging.getLogger("vatic.server")
+# logger = logging.getLogger("vatic.server")
+
 
 @handler()
 def getjob(id, verified):
     job = session.query(Job).get(id)
 
-    logger.debug("Found job {0}".format(job.id))
+    # logger.debug("Found job {0}".format(job.id))
+    # print("Found job {0}".format(job.id))
 
     if int(verified) and job.segment.video.trainwith:
         # swap segment with the training segment
         training = True
         segment = job.segment.video.trainwith.segments[0]
-        logger.debug("Swapping actual segment with training segment")
+        # logger.debug("Swapping actual segment with training segment")
+        # print("Swapping actual segment with training segment")
     else:
         training = False
         segment = job.segment
@@ -32,9 +35,12 @@ def getjob(id, verified):
     for label in video.labels:
         attributes[label.id] = dict((a.id, a.text) for a in label.attributes)
 
-    logger.debug("Giving user frames {0} to {1} of {2}".format(video.slug,
-                                                               segment.start,
-                                                               segment.stop))
+    # logger.debug("Giving user frames {0} to {1} of {2}".format(video.slug,
+    #                                                            segment.start,
+    #                                                            segment.stop))
+    # print("Giving user frames {0} to {1} of {2}".format(video.slug,
+    #                                                            segment.start,
+    #                                                            segment.stop))
 
     return {"start":        segment.start,
             "stop":         segment.stop,
@@ -63,14 +69,15 @@ def getboxesforjob(id):
 
 def readpaths(tracks):
     paths = []
-    logger.debug("Reading {0} total tracks".format(len(tracks)))
+    # logger.debug("Reading {0} total tracks".format(len(tracks)))
+    # print("Reading {0} total tracks".format(len(tracks)))
 
     for label, track, attributes in tracks:
         path = Path()
         path.label = session.query(Label).get(label)
         
-        logger.debug("Received a {0} track".format(path.label.text))
-
+        # logger.debug("Received a {0} track".format(path.label.text))
+        # print("Received a {0} track".format(path.label.text))
         visible = False
         for frame, userbox in track.items():
             box = Box(path = path)
@@ -84,10 +91,12 @@ def readpaths(tracks):
             if not box.outside:
                 visible = True
 
-            logger.debug("Received box {0}".format(str(box.getbox())))
+            # logger.debug("Received box {0}".format(str(box.getbox())))
+            # print("Received box {0}".format(str(box.getbox())))
 
         if not visible:
-            logger.warning("Received empty path! Skipping")
+            # logger.warning("Received empty path! Skipping")
+            # print("Received empty path! Skipping")
             continue
 
         for attributeid, timeline in attributes.items():
