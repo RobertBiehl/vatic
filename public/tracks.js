@@ -796,6 +796,15 @@ function Track(player, color, position)
             this.handle.removeClass("boundingboxoccluded");
         }
 
+        if (position.ismanual)
+        {
+            this.handle.addClass("boundingboxmanual");
+        }
+        else
+        {
+            this.handle.removeClass("boundingboxmanual");
+        }
+
         var offset = this.player.handle.offset();
 
         this.handle.css({
@@ -981,7 +990,7 @@ function Track(player, color, position)
             outside = bounds['left'].outside;
 //        }
 
-        return new Position(xtl, ytl, xbr, ybr, occluded, outside);
+        return new Position(xtl, ytl, xbr, ybr, occluded, outside, true);
     }
 
     this.draw(this.player.frame);
@@ -1131,7 +1140,7 @@ function Journal(start, blowradius)
  * A structure to store a position.
  * Occlusion and outside is optional.
  */
-function Position(xtl, ytl, xbr, ybr, occluded, outside)
+function Position(xtl, ytl, xbr, ybr, occluded, outside, estimated)
 {
     this.xtl = xtl;
     this.ytl = ytl;
@@ -1141,6 +1150,8 @@ function Position(xtl, ytl, xbr, ybr, occluded, outside)
     this.outside = outside ? true : false;
     this.width = xbr - xtl;
     this.height = ybr - ytl;
+
+    this.manual = !estimated
 
     if (this.xbr <= this.xtl)
     {

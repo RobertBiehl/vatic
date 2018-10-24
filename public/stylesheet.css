@@ -370,6 +370,11 @@ code
     border-style : dashed;
 }
 
+.boundingboxmanual
+{
+    background-color: rgba(0,0,0,0.1);
+}
+
 .ui-resizable-disabled
 {
     opacity : 1.0 !important;
